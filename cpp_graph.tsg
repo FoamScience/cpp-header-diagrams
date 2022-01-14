@@ -1,0 +1,270 @@
+;; Draw class diagrams for C++ header files
+
+;; Please run with (in a tree-sitter-cpp grammar directory):
+;; tree-sitter-graph graph.scm test.hpp
+
+;; Please feed "PARSABLE" files into this thing, we don't care if the file
+;; has some unsupported features (all will be ignored), but
+;; `tree-sitter parse test.hpp`
+;; must succeed, you have been warned
+
+;; Example inaccuracy:
+;; - Templates representation
+
+;; Current limitations: A lot, but next ones to be solved are
+;; - No namespace/scope support
+
+;; Please follow the following policies:
+;; - Create persistent nodes with only names when possible; alter their properties as you go!
+
+;; 0.0 Create nodes for (almost) every type appearing in the file
+;; 0.0.1 Free Types
+(_ name: (type_identifier) @type)
+{
+    node @type.node
+    attr (@type.node) name = (source-text @type)
+}
+;; 0.0.2 Template types
+(template_type name: (type_identifier) @type arguments: (_) @args) @t_type
+{
+    attr (@type.node) kind = (node-type @t_type), arguments = (source-text @args)
+}
+;; 0.0.3 Types for class/template members
+(base_class_clause
+    (_)*
+    [
+        (type_identifier) @type
+    ]
+)
+{
+    node @type.node
+    attr (@type.node) name = (source-text @type)
+}
+
+;; 0.1 Mark classes and class templates
+(class_specifier
+    name: (_) @class
+)
+{
+    attr (@class.node) kind = "class"
+}
+(template_declaration
+    parameters: (_) @params
+    (class_specifier
+        name: (_) @class
+    )
+)
+{
+    attr (@class.node) parameters = (source-text @params)
+}
+
+;; 1.0 Link classes/templates to their parents
+(class_specifier
+    name: (_) @class
+    (base_class_clause
+        (_)*
+        [
+            (qualified_identifier
+                scope: (_) @scope
+                name: (type_identifier) @parent
+            )
+            (type_identifier) @parent
+            (qualified_identifier
+                scope: (_) @scope
+                name: (template_type name: (type_identifier) @parent)
+            )
+            (template_type name: (type_identifier) @parent)
+        ]
+    )
+)
+{
+    ;; Prefer edges over attr here because a class may have more than one parent
+    edge @parent.node -> @class.node
+    attr (@parent.node -> @class.node) relationship = "parent"
+}
+
+;; 2.0 Link classes/templates to member variables
+;; Going into detailed template versions for better detection of access specifiers
+(class_specifier
+    name: (_) @class
+    (_)*
+    (field_declaration_list
+        (access_specifier) @access
+        .
+        (field_declaration
+            type: (_) @type
+            declarator: (field_identifier) @member
+        )
+        (access_specifier)?
+    )
+)
+{
+    node @member.node
+    attr (@member.node) name = (source-text @member), type = (source-text @type), kind = "member_field", access = (source-text @access)
+    ;; Prefer edges over attr here because a class may have more than one member
+    edge @class.node -> @member.node
+    attr (@class.node -> @member.node) relationship = "has_member"
+}
+(class_specifier
+    name: (_) @class
+    (_)*
+    (field_declaration_list
+        (access_specifier) @access
+        (_)*
+        (template_declaration
+            parameters: (_) @params
+            (declaration
+                type: (_) @type
+                declarator: [(identifier) (field_identifier)] @member
+            )
+        )
+        (access_specifier)?
+    )
+)
+{
+    node @member.node
+    attr (@member.node) name = (source-text @member), type = (source-text @type), parameters = (source-text @params), kind = "member_template", access = (source-text @access)
+    ;; Prefer edges over attr here because a class may have more than one member
+    edge @class.node -> @member.node
+    attr (@class.node -> @member.node) relationship = "has_member"
+}
+
+(class_specifier
+    name: (_) @class
+    (_)*
+    (field_declaration_list
+        (access_specifier) @access
+        (_)*
+        (field_declaration
+            type: (_) @type
+            declarator: (function_declarator)  @member
+        )
+        (access_specifier)?
+    )
+)
+{
+    node @member.node
+    attr (@member.node) name = (source-text @member), type = (source-text @type), kind = "member_function", access = (source-text @access)
+    ;; Prefer edges over attr here because a class may have more than one member
+    edge @class.node -> @member.node
+    attr (@class.node -> @member.node) relationship = "has_member"
+}
+(class_specifier
+    name: (_) @class
+    (_)*
+    (field_declaration_list
+        (access_specifier) @access
+        (_)*
+        (template_declaration
+            parameters: (_) @params
+            (declaration
+                type: (_) @type
+                declarator: (function_declarator) @member
+            )
+        )
+        (access_specifier)?
+    )
+)
+{
+    node @member.node
+    attr (@member.node) name = (source-text @member), type = (source-text @type), parameters = (source-text @params), kind = "member_function_template", access = (source-text @access)
+    ;; Prefer edges over attr here because a class may have more than one member
+    edge @class.node -> @member.node
+    attr (@class.node -> @member.node) relationship = "has_member"
+}
+
+;; 3.1 Check for pure virtual member functions
+(class_specifier
+    name: (_) @class
+    (_)*
+    (field_declaration_list
+        (_)*
+        (field_declaration
+            (virtual_function_specifier) ;; catch "virtual"
+            type: (_) @type
+            declarator: (function_declarator)  @member
+            default_value: (number_literal) ;; OK there is a number default value, that's the 0
+        )
+    )
+)
+{
+    attr (@member.node) abstract = "true"
+    attr (@class.node) abstract = "true"
+}
+
+;; 3.2 Check for storage specifiers on class/templates members
+(class_specifier
+    name: (_) @class
+    (_)*
+    (field_declaration_list
+        (access_specifier) @access
+        .
+        (field_declaration
+            (storage_class_specifier) @storage
+            type: (_) @type
+            declarator: (field_identifier) @member
+        )
+        (access_specifier)?
+    )
+)
+{
+    attr (@member.node) storage = (source-text @storage)
+}
+(class_specifier
+    name: (_) @class
+    (_)*
+    (field_declaration_list
+        (access_specifier) @access
+        (_)*
+        (template_declaration
+            parameters: (_) @params
+            (declaration
+                (storage_class_specifier) @storage
+                type: (_) @type
+                declarator: [(identifier) (field_identifier)] @member
+            )
+        )
+        (access_specifier)?
+    )
+)
+{
+    attr (@member.node) storage = (source-text @storage)
+}
+
+(class_specifier
+    name: (_) @class
+    (_)*
+    (field_declaration_list
+        (access_specifier) @access
+        (_)*
+        (field_declaration
+            (storage_class_specifier) @storage
+            type: (_) @type
+            declarator: (function_declarator)  @member
+        )
+        (access_specifier)?
+    )
+)
+{
+    attr (@member.node) storage = (source-text @storage)
+}
+(class_specifier
+    name: (_) @class
+    (_)*
+    (field_declaration_list
+        (access_specifier) @access
+        (_)*
+        (template_declaration
+            parameters: (_) @params
+            (declaration
+                (storage_class_specifier) @storage
+                type: (_) @type
+                declarator: (function_declarator) @member
+            )
+        )
+        (access_specifier)?
+    )
+)
+{
+    attr (@member.node) storage = (source-text @storage)
+}

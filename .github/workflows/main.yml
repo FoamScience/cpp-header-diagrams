@@ -1,0 +1,29 @@
+on: [push]
+name: CI
+
+jobs:
+  build_and_test:
+    name: Cpp graphs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: --features cli tree-sitter-graph
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '16'
+      - run: bash -c "cd tree-sitter-cpp; npm install"
+      - run: npm install -g tree-sitter-cli
+      - run: sudo apt install -y graphviz gawk
+      - run: ./test/build.sh
+      - uses: actions/upload-artifact@v2
+        with:
+          name: diagram
+          path: cpp_graph.pdf
