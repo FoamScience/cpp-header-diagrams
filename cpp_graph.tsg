@@ -84,94 +84,71 @@
 }
 
 ;; 2.0 Link classes/templates to member variables
-;; Going into detailed template versions for better detection of access specifiers
+;; with support for storage specifiers and qualifiers 
 (class_specifier
     name: (_) @class
-    (_)*
     (field_declaration_list
-        (access_specifier) @access
-        .
-        (field_declaration
-            type: (_) @type
-            declarator: (field_identifier) @member
-        )
-        (access_specifier)?
-    )
-)
-{
-    node @member.node
-    attr (@member.node) name = (source-text @member), type = (source-text @type), kind = "member_field", access = (source-text @access)
-    ;; Prefer edges over attr here because a class may have more than one member
-    edge @class.node -> @member.node
-    attr (@class.node -> @member.node) relationship = "has_member"
-}
-(class_specifier
-    name: (_) @class
-    (_)*
-    (field_declaration_list
-        (access_specifier) @access
-        (_)*
-        (template_declaration
-            parameters: (_) @params
-            (declaration
+        [
+            ;; Members - refs, values & methods
+            (field_declaration
+                (storage_class_specifier)? @storage ;; static ... etc
+                (type_qualifier)? @qualifier ;; const ... etc
                 type: (_) @type
-                declarator: [(identifier) (field_identifier)] @member
+                declarator: [
+                    (identifier) @member
+                    (field_identifier) @member
+                    (reference_declarator [(identifier) (field_identifier)] @member)
+                    (function_declarator declarator: (_) @member_func) @member
+                ]
             )
-        )
-        (access_specifier)?
+            ;; Member templates
+            (template_declaration
+                parameters: (_) @params
+                (declaration
+                    (storage_class_specifier)? @storage ;; static ... etc
+                    (type_qualifier)? @qualifier ;; const ... etc
+                    type: (_) @type
+                    declarator: [
+                        (identifier) @member
+                        (field_identifier) @member
+                        (reference_declarator [(identifier) (field_identifier)] @member)
+                        (function_declarator declarator: (_) @member_func) @member
+                    ]
+                )
+            )
+        ]
     )
 )
 {
     node @member.node
-    attr (@member.node) name = (source-text @member), type = (source-text @type), parameters = (source-text @params), kind = "member_template", access = (source-text @access)
+    attr (@member.node) name = (source-text @member), type = (source-text @type)
+    ;; Prepare for access specifiers
+    var @member.access = "private"
     ;; Prefer edges over attr here because a class may have more than one member
     edge @class.node -> @member.node
     attr (@class.node -> @member.node) relationship = "has_member"
+
+    ;; If a member method
+    if some @member_func, none @params {
+        attr (@member.node) kind = "member_function"
+    }
+    if some @member_func, some @params {
+        attr (@member.node) kind = "template_member_function", parameters = (source-text @params)
+    }
+    if none @member_func {
+        attr (@member.node) kind = "member_field"
+    }
+
+    ;; If there is a qualifier
+    if some @qualifier {
+        attr (@member.node) qualifier = (source-text @qualifier)
+    }
+    ;; If there is a storage specifier
+    if some @storage {
+        attr (@member.node) storage = (source-text @storage)
+    }
 }
 
-(class_specifier
-    name: (_) @class
-    (_)*
-    (field_declaration_list
-        (access_specifier) @access
-        (_)*
-        (field_declaration
-            type: (_) @type
-            declarator: (function_declarator)  @member
-        )
-        (access_specifier)?
-    )
-)
-{
-    node @member.node
-    attr (@member.node) name = (source-text @member), type = (source-text @type), kind = "member_function", access = (source-text @access)
-    ;; Prefer edges over attr here because a class may have more than one member
-    edge @class.node -> @member.node
-    attr (@class.node -> @member.node) relationship = "has_member"
-}
-(class_specifier
-    name: (_) @class
-    (_)*
-    (field_declaration_list
-        (access_specifier) @access
-        (_)*
-        (template_declaration
-            parameters: (_) @params
-            (declaration
-                type: (_) @type
-                declarator: (function_declarator) @member
-            )
-        )
-        (access_specifier)?
-    )
-)
-{
-    node @member.node
-    attr (@member.node) name = (source-text @member), type = (source-text @type), parameters = (source-text @params), kind = "member_function_template", access = (source-text @access)
-    ;; Prefer edges over attr here because a class may have more than one member
-    edge @class.node -> @member.node
-    attr (@class.node -> @member.node) relationship = "has_member"
-}
 
 ;; 3.1 Check for pure virtual member functions
 (class_specifier
@@ -189,82 +166,85 @@
 )
 {
     attr (@member.node) abstract = "true"
-    attr (@class.node) abstract = "true"
+    ;; TODO: Should mark the class too at this point
 }
 
-;; 3.2 Check for storage specifiers on class/templates members
+;; 3.2 Check for access specifiers for members
 (class_specifier
     name: (_) @class
-    (_)*
     (field_declaration_list
-        (access_specifier) @access
-        .
-        (field_declaration
-            (storage_class_specifier) @storage
-            type: (_) @type
-            declarator: (field_identifier) @member
-        )
-        (access_specifier)?
-    )
-)
-{
-    attr (@member.node) storage = (source-text @storage)
-}
-(class_specifier
-    name: (_) @class
-    (_)*
-    (field_declaration_list
-        (access_specifier) @access
-        (_)*
-        (template_declaration
-            parameters: (_) @params
-            (declaration
-                (storage_class_specifier) @storage
+        (access_specifier)? @access
+        [
+            ;; Members - refs, values & methods
+            (field_declaration
+                (storage_class_specifier)? @storage ;; static ... etc
+                (type_qualifier)? @qualifier ;; const ... etc
                 type: (_) @type
-                declarator: [(identifier) (field_identifier)] @member
+                declarator: [
+                    (identifier) @member
+                    (field_identifier) @member
+                    (reference_declarator [(identifier) (field_identifier)] @member)
+                    (function_declarator) @member
+                ]
             )
-        )
-        (access_specifier)?
+            ;; Member templates
+            (template_declaration
+                parameters: (_) @params
+                (declaration
+                    (storage_class_specifier)? @storage ;; static ... etc
+                    (type_qualifier)? @qualifier ;; const ... etc
+                    type: (_) @type
+                    declarator: [
+                        (identifier) @member
+                        (field_identifier) @member
+                        (reference_declarator [(identifier) (field_identifier)] @member)
+                        (function_declarator) @member
+                    ]
+                )
+            )
+        ]
     )
 )
 {
-    attr (@member.node) storage = (source-text @storage)
+    if some @access {
+        set @member.access = (source-text @access)
+    }
 }
-
+;; Have to do this because there is no way to override attributes
 (class_specifier
     name: (_) @class
-    (_)*
     (field_declaration_list
-        (access_specifier) @access
-        (_)*
-        (field_declaration
-            (storage_class_specifier) @storage
-            type: (_) @type
-            declarator: (function_declarator)  @member
-        )
-        (access_specifier)?
-    )
-)
-{
-    attr (@member.node) storage = (source-text @storage)
-}
-(class_specifier
-    name: (_) @class
-    (_)*
-    (field_declaration_list
-        (access_specifier) @access
-        (_)*
-        (template_declaration
-            parameters: (_) @params
-            (declaration
-                (storage_class_specifier) @storage
+        [
+            ;; Members - refs, values & methods
+            (field_declaration
+                (storage_class_specifier)? @storage ;; static ... etc
+                (type_qualifier)? @qualifier ;; const ... etc
                 type: (_) @type
-                declarator: (function_declarator) @member
+                declarator: [
+                    (identifier) @member
+                    (field_identifier) @member
+                    (reference_declarator [(identifier) (field_identifier)] @member)
+                    (function_declarator) @member
+                ]
             )
-        )
-        (access_specifier)?
+            ;; Member templates
+            (template_declaration
+                parameters: (_) @params
+                (declaration
+                    (storage_class_specifier)? @storage ;; static ... etc
+                    (type_qualifier)? @qualifier ;; const ... etc
+                    type: (_) @type
+                    declarator: [
+                        (identifier) @member
+                        (field_identifier) @member
+                        (reference_declarator [(identifier) (field_identifier)] @member)
+                        (function_declarator) @member
+                    ]
+                )
+            )
+        ]
     )
 )
 {
-    attr (@member.node) storage = (source-text @storage)
+    attr (@member.node) access = @member.access
 }
