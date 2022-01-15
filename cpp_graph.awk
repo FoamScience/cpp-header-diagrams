@@ -12,7 +12,7 @@
 #       - [x] attributes (access, static, type, derived?)
 #       - [x] methods (access, static, return type)
 # - [ ] Produce proper class-relationship arrows
-#       - [ ] Inheritence
+#       - [x] Inheritence
 #       - [ ] Usage (aggregation, composition ***, dependency)
  
 function class_label(node_name) {
@@ -114,8 +114,13 @@ BEGIN {
     prop = substr($1,0,length($1)-1)
     nodes[node_name][prop] = $2
 
-    # Copy name to label
+    # Check alias nodes and copy name to label
     if ($1 ~ /name/) {
+        if ($2 in node_names) {
+            # name is found again, this node is an alias node to node_names[$2]
+            nodes[node_name]["alias"] = node_names[$2]
+        }
+        node_names[$2] = node_name
         nodes[node_name]["label"] = nodes[node_name]["name"]
     }
 
@@ -155,6 +160,10 @@ END {
                 entry = access(child) " " format(nodes[child]["label"]) " : " format(nodes[child]["type"])
                 entry = format_storage(child, entry)
                 nodes[parent]["member_funs"] = nodes[parent]["member_funs"] entry "<br align=\"left\"/>"
+                # Mark the class as abstract if it has at least one pure virtual member
+                if (nodes[child]["abstract"]) {
+                    nodes[parent]["abstract"] = "true"
+                }
             } else {
                 entry = access(child)  " " format(nodes[child]["label"]) " : " format(nodes[child]["type"])
                 entry = format_storage(child, entry)
@@ -170,7 +179,7 @@ END {
                 if (nodes[child_type_node]["label"] == "") {
                     nodes[child_type_node]["label"] = nodes[child]["type"]
                 }
-                agg_edges[parent child_type_node] = "\t" parent " -> " child_type_node " [arrowhead=\"odiamond\", headlabel=\"1\", taillabel=\"1\"]"
+                agg_edges[parent child_type_node] = "\t" parent " -> " child_type_node " [labeldistance=1.2, arrowhead=\"odiamond\", headlabel=\"1\", taillabel=\"1\"]"
             }
         }
     }
@@ -191,6 +200,10 @@ END {
     # Diagram
     print "digraph" DR " {"
     for(node in nodes) {
+        # Skip drawing alias nodes
+        if (nodes[node]["alias"]) {
+            nodes[node]["show"] = ""
+        }
         # Draw class nodes
         if (nodes[node]["kind"] ~ /class/) {
             print node, "[ label = < {" class_label(node) " | " nodes[node]["member_vars"] " | " nodes[node]["member_funs"] "} >, shape=record, fontname=" mono_font "]"
@@ -201,8 +214,13 @@ END {
     print ""
     # Edges from original graph (Inheritance only)
     for(i = 0; i <= edge_index; i++) {
+        # Firgure out the real parent graph node
+        parent_node = "node_" edges[i][0]
+        if (nodes[parent_node]["alias"]) {
+            parent_node = nodes[parent_node]["alias"]
+        }
         if (edges[i][2] ~ /parent/) {
-            print "\tnode_" edges[i][0] " -> node_" edges[i][1] "[arrowhead=\"empty\"]"
+            print "\t" parent_node " -> node_" edges[i][1] "[labeldistance=1.2, arrowhead=\"empty\"]"
         }
     }
     # Edges for template instatiations (here considered a composition relationship)
@@ -213,7 +231,7 @@ END {
                 split(nodes[node]["instantiations"], insts, ";")
                 for (idx in insts) {
                     if (insts[idx]) {
-                        print "\t" node " -> " insts[idx] "[arrowhead=\"diamond\", headlabel=\"1\", taillabel=\"1\"]"
+                        print "\t" node " -> " insts[idx] "[labeldistance=1.2, arrowhead=\"diamond\", headlabel=\"1\", taillabel=\"1\"]"
                     }
                 }
             }
