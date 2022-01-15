@@ -16,7 +16,11 @@ You need the following software packages to make this work:
 3. Tree-Sitter CLI, which can be installed with `npm install -g tree-sitter-cli`
 4. The C++ grammar for Tree-Sitter (included as a sub-module)
    - Please run `npm install` in the [tree-sitter-cpp directory](tree-sitter-cpp)
-5. [tree-sitter-graph](https://github.com/tree-sitter/tree-sitter-graph), which is a Rust lib/binary, you'll have to get [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html)
+5. [tree-sitter-graph](https://github.com/tree-sitter/tree-sitter-graph), which is a Rust lib/binary (included as a sub-module)
+   - Please run `cargo build --bins --features cli` in the [tree-sitter-graph directory](tree-sitter-graph)
+   - You can get cargo [from here](https://doc.rust-lang.org/cargo/getting-started/installation.html)
+
+> tree-sitter-graph is in early stages of development, that's why we need to freeze the commits we work with.
 
 ### A Quick guide for Devs/Users
 
@@ -24,9 +28,8 @@ You need the following software packages to make this work:
 
 A one-liner for the impatient (on a *Nix machine):
 ```bash
-# All tree-sitter-graph commands must run inside tree-sitter-cpp
-cd tree-sitter-cpp
-tree-sitter-graph ../cpp_graph.tsg ../cpp_graph.hpp | awk -f ../cpp_graph.awk | dot -Tpdf -o ../cpp_graph.pdf
+# Put your header file at cpp_graph.hpp, then run
+./test/build.sh
 ```
 
 #### Step 1: Parse your header file
@@ -47,8 +50,8 @@ encouraged to report bugs here or at [tree-sitter-cpp](https://github.com/tree-s
 
 To produce a graph for your header file:
 ```bash
-# In tree-sitter-cpp
-tree-sitter-graph ../cpp_graph.tsg ../cpp_graph.hpp
+# In tree-sitter-cpp directory
+../tree-sitter-graph/target/debug/tree-sitter-graph ../cpp_graph.tsg ../cpp_graph.hpp
 ```
 
 `cpp_graph.tsg` is what drives graph nodes creation and linking. It relies on the parsed file tree
