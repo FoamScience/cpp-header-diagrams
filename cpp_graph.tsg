@@ -100,22 +100,40 @@
                     (reference_declarator [(identifier) (field_identifier)] @member)
                     (function_declarator declarator: (_) @member_func) @member
                 ]
-                default_value: (_)?
+            )
+            ;; Member definitions - inline methods
+            (function_definition
+                type: (_) @type
+                declarator: [
+                    (function_declarator declarator: (_) @member_func) @member
+                    (reference_declarator ((function_declarator declarator: (_) @member_func) @member))
+                ]
+                body: (_) @body
             )
             ;; Member templates
             (template_declaration
                 parameters: (_) @params
-                (declaration
-                    (type_qualifier)? @qualifier ;; const ... etc
-                    (storage_class_specifier)? @storage ;; static ... etc
-                    type: (_) @type
-                    declarator: [
-                        (identifier) @member
-                        (field_identifier) @member
-                        (reference_declarator [(identifier) (field_identifier)] @member)
-                        (function_declarator declarator: (_) @member_func) @member
-                    ]
-                )
+                [
+                    (declaration
+                        (type_qualifier)? @qualifier ;; const ... etc
+                        (storage_class_specifier)? @storage ;; static ... etc
+                        type: (_) @type
+                        declarator: [
+                            (identifier) @member
+                            (field_identifier) @member
+                            (reference_declarator [(identifier) (field_identifier)] @member)
+                            (function_declarator declarator: (_) @member_func) @member
+                        ]
+                    )
+                    (function_definition
+                        type: (_) @type
+                        declarator: [
+                            (function_declarator declarator: (_) @member_func) @member
+                            (reference_declarator ((function_declarator declarator: (_) @member_func) @member))
+                        ]
+                        body: (_) @body
+                    )
+                ]
             )
         ]
     )
@@ -124,7 +142,7 @@
     node @member.node
     attr (@member.node) name = (source-text @member), type = (source-text @type)
     ;; Prepare for access specifiers
-    var @member.access = "private"
+    var @member.access = "private:"
     ;; Prefer edges over attr here because a class may have more than one member
     edge @class.node -> @member.node
     attr (@class.node -> @member.node) relationship = "has_member"
@@ -188,20 +206,40 @@
                     (function_declarator) @member
                 ]
             )
+            ;; Defined methods
+            (function_definition
+                (storage_class_specifier)? @storage ;; static ... etc
+                (type_qualifier)? @qualifier ;; const ... etc
+                type: (_) @type
+                declarator: [
+                    (function_declarator declarator: (_) @member_func) @member
+                    (reference_declarator ((function_declarator declarator: (_) @member_func) @member))
+                ]
+            )
             ;; Member templates
             (template_declaration
                 parameters: (_) @params
-                (declaration
-                    (storage_class_specifier)? @storage ;; static ... etc
-                    (type_qualifier)? @qualifier ;; const ... etc
-                    type: (_) @type
-                    declarator: [
-                        (identifier) @member
-                        (field_identifier) @member
-                        (reference_declarator [(identifier) (field_identifier)] @member)
-                        (function_declarator) @member
-                    ]
-                )
+                [
+                    (declaration
+                        (storage_class_specifier)? @storage ;; static ... etc
+                        (type_qualifier)? @qualifier ;; const ... etc
+                        type: (_) @type
+                        declarator: [
+                            (identifier) @member
+                            (field_identifier) @member
+                            (reference_declarator [(identifier) (field_identifier)] @member)
+                            (function_declarator) @member
+                        ]
+                    )
+                    (function_definition
+                        type: (_) @type
+                        declarator: [
+                            (function_declarator declarator: (_) @member_func) @member
+                            (reference_declarator ((function_declarator declarator: (_) @member_func) @member))
+                        ]
+                        body: (_) @body
+                    )
+                ]
             )
         ]
     )
@@ -226,22 +264,66 @@
                     (function_declarator) @member
                 ]
             )
+            ;; Defined methods
+            (function_definition
+                (storage_class_specifier)? @storage ;; static ... etc
+                (type_qualifier)? @qualifier ;; const ... etc
+                type: (_) @type
+                declarator: [
+                    (function_declarator declarator: (_) @member_func) @member
+                    (reference_declarator ((function_declarator declarator: (_) @member_func) @member))
+                ]
+            )
             ;; Member templates
             (template_declaration
                 parameters: (_) @params
-                (declaration
-                    type: (_) @type
-                    declarator: [
-                        (identifier) @member
-                        (field_identifier) @member
-                        (reference_declarator [(identifier) (field_identifier)] @member)
-                        (function_declarator) @member
-                    ]
-                )
+                [
+                    (declaration
+                        (storage_class_specifier)? @storage ;; static ... etc
+                        (type_qualifier)? @qualifier ;; const ... etc
+                        type: (_) @type
+                        declarator: [
+                            (identifier) @member
+                            (field_identifier) @member
+                            (reference_declarator [(identifier) (field_identifier)] @member)
+                            (function_declarator) @member
+                        ]
+                    )
+                    (function_definition
+                        type: (_) @type
+                        declarator: [
+                            (function_declarator declarator: (_) @member_func) @member
+                            (reference_declarator ((function_declarator declarator: (_) @member_func) @member))
+                        ]
+                        body: (_) @body
+                    )
+                ]
             )
         ]
     )
 )
 {
     attr (@member.node) access = @member.access
+}
+
+;; 4.0 Namespaces
+;; Assign a namespace entry for each class found
+(namespace_definition
+    name: (_) @namespace
+    body: (declaration_list
+        [
+            (class_specifier
+                name: (_) @class
+            )
+            (template_declaration
+                parameters: (_) @params
+                (class_specifier
+                    name: (_) @class
+                )
+            )
+        ]
+    )
+)
+{
+    attr (@class.node) namespace = (source-text @namespace)
 }

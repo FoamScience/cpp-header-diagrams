@@ -1,7 +1,7 @@
 [submodule "tree-sitter-cpp"]
 	path = tree-sitter-cpp
-	url = https://github.com/tree-sitter/tree-sitter-cpp
-	branch = master
+	url = https://github.com/FoamScience/tree-sitter-cpp
+	branch = develop
 [submodule "tree-sitter-graph"]
 	path = tree-sitter-graph
 	url = https://github.com/tree-sitter/tree-sitter-graph

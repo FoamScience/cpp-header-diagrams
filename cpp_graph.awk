@@ -197,21 +197,42 @@ END {
         }
     }
 
+    # Preparing the diagram
+
+    # 1.0 Subgraphs represent name spaces
+
     # Diagram
-    print "digraph" DR " {"
+    print "digraph DR {"
+    print "\tcompound=true; nodesep=.75;"
     for(node in nodes) {
         # Skip drawing alias nodes
         if (nodes[node]["alias"]) {
             nodes[node]["show"] = ""
         }
         # Draw class nodes
-        if (nodes[node]["kind"] ~ /class/) {
-            print node, "[ label = < {" class_label(node) " | " nodes[node]["member_vars"] " | " nodes[node]["member_funs"] "} >, shape=record, fontname=" mono_font "]"
-        } else  if (nodes[node]["show"]){
-            print node, "[ label = < " format(nodes[node]["label"]) ">, shape=rect, fontname=" mono_font "]"
+        if (nodes[node]["namespace"]) {
+            if (nodes[node]["kind"] ~ /class/) {
+                members = nodes[node]["member_vars"] ? " | " nodes[node]["member_vars"] : ""
+                methods = nodes[node]["member_funs"] ? " | " nodes[node]["member_funs"] : ""
+                subgraphs[nodes[node]["namespace"]] = subgraphs[nodes[node]["namespace"]] node " [ label = < {" class_label(node) members methods "} >, shape=record, fontname=" mono_font "]"
+            } else  if (nodes[node]["show"]){
+                subgraphs[nodes[node]["namespace"]] = subgraphs[nodes[node]["namespace"]] node " [ label = < " format(nodes[node]["label"]) ">, shape=rect, fontname=" mono_font "]"
+            }
+        } else {
+            if (nodes[node]["kind"] ~ /class/) {
+                print node, "[ label = < {" class_label(node) " | " nodes[node]["member_vars"] " | " nodes[node]["member_funs"] "} >, shape=record, fontname=" mono_font "]"
+            } else  if (nodes[node]["show"]){
+                print node, "[ label = < " format(nodes[node]["label"]) ">, shape=rect, fontname=" mono_font "]"
+            }
         }
     }
-    print ""
+    for(sg in subgraphs) {
+        print "subgraph cluster_" substr(sg, 2, length(sg)-2), "{"
+        print "style=filled; color=lightgrey;"
+        print "label =", sg
+        print subgraphs[sg]
+        print "}"
+    }
     # Edges from original graph (Inheritance only)
     for(i = 0; i <= edge_index; i++) {
         # Firgure out the real parent graph node

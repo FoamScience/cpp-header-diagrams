@@ -39,23 +39,23 @@ protected:
 public:
 
     //- Runtime type information
-    //TypeName("coupledSystem");
+    TypeName("coupledSystem");
 
     //- Type of functions to execute
     using callableType = std::function<void(coupledSystem&)>;
 
     // Declare run-time constructor selection table
-    //declareRunTimeSelectionTable
-    //(
-    //    autoPtr,
-    //    coupledSystem,
-    //    phases,
-    //    (
-    //        const fvMesh& mesh,
-    //        const wordList& phaseNames
-    //    ),
-    //    (mesh, phaseNames)
-    //);
+    declareRunTimeSelectionTable
+    (
+        autoPtr,
+        coupledSystem,
+        phases,
+        (
+            const fvMesh& mesh,
+            const wordList& phaseNames
+        ),
+        (mesh, phaseNames)
+    );
 
     // Constructors
 
@@ -123,8 +123,68 @@ public:
         )  = 0;
 
         //- Execute a callable on the system
-        virtual void execute(callableType& func);
+        virtual void execute(callableType& func) {
+            func(*this);
+        }
+
+        const dictionary& dict() {
+            return dict_;
+        }
+
+        template<class T>
+        const autoPtr<T>& getNullPtr() {
+            return nullptr;
+        }
 };
+
+// (Compile-time) TypeNames for coupledSystems
+namespace coupledSystemNaming
+{
+    // Declare struct template for digits-to-chars conversion
+    template<unsigned... digits>
+    class toChars
+    {
+        public:
+        static const char value[];
+    };
+    
+    // Define static member: value
+    template<unsigned... digits>
+    const char toChars<digits...>::value[] 
+        // This is "coupledSystem<nPhases>" (nPhases from template arg)
+        // Headacke to improve on this because char array can be initialized
+        // only from initialization list or a string literal
+        // NOTE: This must conform to what coupledSystem::New() is looking for
+        = {'c', 'o', 'u', 'p', 'l', 'e', 'd', 'S', 'y', 's', 't', 'e', 'm'
+          , '<', ('0' + digits)..., '>', 0};
+
+    // Explode digits in Base 10
+    template<unsigned rem, unsigned... digits>
+    struct explode : explode<rem / 10, rem % 10, digits...>
+    {};
+
+    // Explicit specialization to explode numbers of a single digit
+    template<unsigned... digits>
+    struct explode<0, digits...> : toChars<digits...> {};
+
+} // End namespace coupledSystemNaming
+
+template<unsigned nPhases>
+struct nPhasesToChars
+:
+    coupledSystemNaming::explode<nPhases / 10, nPhases % 10>
+{};
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+namespace Foam
+{
+
+
+
+/*---------------------------------------------------------------------------*\
+                      Class coupledSystemTemplate Declaration
+\*---------------------------------------------------------------------------*/
 
 template <int nPhases>
 class coupledSystemTemplate
@@ -322,5 +382,53 @@ public:
         }
 
         //- Not implement writing
-        virtual bool writeData(Ostream&) const; // { return false; };
+        virtual bool writeData(Ostream&) const { return false; }
 };
+
+// Support up to 10 phases by default
+#ifndef MAX_NPHASES
+    #define MAX_NPHASES() 10
+#endif // !MAX_NPHASES
+
+// Type to be used to access the system of equations with
+using blockMatrixPtrType = coupledSystemTemplate<0>*;
+
+// Finder for registered coupledSystems
+template<int N>
+struct findCoupledSystem
+{
+    // Concrete Type we're matching
+    using type = coupledSystemTemplate<N>;
+
+    // Stop the recursion?
+    static bool stop;
+
+    // Compile-time recursion until the correct coupledSystemTemplate is caught
+    // Recursion should go UP in N values
+    static blockMatrixPtrType castToConcrete
+    (
+        const Time& t,
+        coupledSystem& system
+    );
+};
+
+// Explicit specialization to stop the Compile-time recursion at a decent nPhases
+// NOTE: Should be exposed by a compiler flag
+template<>
+struct findCoupledSystem<MAX_NPHASES()+1>
+{
+    using type = coupledSystemTemplate<MAX_NPHASES()+1>;
+    static bool stop;
+    static blockMatrixPtrType castToConcrete
+    (
+        const Time& t,
+        coupledSystem& system
+    )
+    {
+        return nullptr;
+    }
+};
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+}
