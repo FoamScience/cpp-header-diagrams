@@ -15,6 +15,35 @@
 #       - [x] Inheritence
 #       - [ ] Usage (aggregation, composition ***, dependency)
  
+### Script controls
+
+## What to skip
+
+# Primitive types 
+function primitive_type(type) {
+    primitive_types["int"] = 0
+    primitive_types["bool"] = 0
+    return type in primitive_types
+}
+
+# Member functions
+function ignored_funcs(node, access_specifier) {
+    funcs["operator="] = 0
+    funcs["writeData"] = 0
+    name_match = 0
+    for(fun in funcs) {
+        if (nodes[node]["name"] ~ fun) {
+            name_match = 1
+            break
+        }
+    }
+    return (nodes[node]["access"] ~ access_specifier) && name_match
+}
+
+## Styling
+
+### Meta functions
+
 function class_label(node_name) {
     # Format class label if the passed graph node name is a class
     # This supposed nodes[node_name]["name"] has the class name
@@ -68,15 +97,7 @@ function format(string) {
     return string
 }
 
-function edge_style(string) {
-    # Assigns graph edge style using edge relationship type
-    # string is empty if edge has no relatioship
-    if (string == "\"has_member\"") {
-        return " [style=dotted]"
-    } else if (string == "\"parent\"") {
-        return " [style=bold]"
-    }
-}
+### Preparations
 
 BEGIN {
     # Treat literal strings as a single column
@@ -88,6 +109,8 @@ BEGIN {
     # Common configs
     mono_font = "ubuntu"
 }
+
+### Parsing
 
 # A node will represent a class, and is an array with indices:
 #    [
@@ -149,12 +172,17 @@ BEGIN {
     edges[edge_index][2] = $2
 }
 
+### Dot Graph creation
+
 END {
     # Sort out has_member relationship
     for(i = 0; i <= edge_index; i++) {
         parent = "node_" edges[i][0]
         child = "node_" edges[i][1]
         nodes[parent]["show"] = "true"
+        if (ignored_funcs(child, "protected")) {
+            continue
+        }
         if (edges[i][2] ~ /has_member/) {
             if (nodes[child]["kind"] ~ /member_function/) {
                 entry = access(child) " " format(nodes[child]["label"]) " : " format(nodes[child]["type"])
@@ -179,7 +207,9 @@ END {
                 if (nodes[child_type_node]["label"] == "") {
                     nodes[child_type_node]["label"] = nodes[child]["type"]
                 }
-                agg_edges[parent child_type_node] = "\t" parent " -> " child_type_node " [labeldistance=1.2, arrowhead=\"odiamond\", headlabel=\"1\", taillabel=\"1\"]"
+                if (primitive_type(substr(nodes[child_type_node]["label"], 2, length(nodes[child_type_node]["label"])-2)) == 0) {
+                    agg_edges[parent child_type_node] = "\t" parent " -> " child_type_node " [labeldistance=1.2, arrowhead=\"odiamond\", headlabel=\"1\", taillabel=\"1\"]"
+                }
             }
         }
     }
@@ -221,7 +251,7 @@ END {
         } else {
             if (nodes[node]["kind"] ~ /class/) {
                 print node, "[ label = < {" class_label(node) " | " nodes[node]["member_vars"] " | " nodes[node]["member_funs"] "} >, shape=record, fontname=" mono_font "]"
-            } else  if (nodes[node]["show"]){
+            } else  if (nodes[node]["show"] && primitive_type(substr(nodes[node]["label"],2, length(nodes[node]["label"])-2)) == 0) {
                 print node, "[ label = < " format(nodes[node]["label"]) ">, shape=rect, fontname=" mono_font "]"
             }
         }
@@ -241,7 +271,7 @@ END {
             parent_node = nodes[parent_node]["alias"]
         }
         if (edges[i][2] ~ /parent/) {
-            print "\t" parent_node " -> node_" edges[i][1] "[labeldistance=1.2, arrowhead=\"empty\"]"
+            print "\tnode_" edges[i][1] " -> " parent_node "[labeldistance=1.2, arrowhead=\"empty\"]"
         }
     }
     # Edges for template instatiations (here considered a composition relationship)
@@ -251,7 +281,7 @@ END {
             if(nodes[node]["instantiations"]) {
                 split(nodes[node]["instantiations"], insts, ";")
                 for (idx in insts) {
-                    if (insts[idx]) {
+                    if (insts[idx] && (primitive_type(nodes[insts[idx]]["name"]) != 0)) {
                         print "\t" node " -> " insts[idx] "[labeldistance=1.2, arrowhead=\"diamond\", headlabel=\"1\", taillabel=\"1\"]"
                     }
                 }
