@@ -21,8 +21,23 @@
 
 # Primitive types 
 function primitive_type(type) {
+    ## C++ fundamental types
     primitive_types["int"] = 0
+    primitive_types["short"] = 0
+    primitive_types["signed"] = 0
+    primitive_types["unsigned"] = 0
+    primitive_types["long"] = 0
+    primitive_types["long long"] = 0
     primitive_types["bool"] = 0
+    primitive_types["char"] = 0
+    primitive_types["float"] = 0
+    primitive_types["double"] = 0
+
+    ## OpenFOAM primite types
+    primitive_types["scalar"] = 0
+    primitive_types["label"] = 0
+    primitive_types["Switch"] = 0
+
     return type in primitive_types
 }
 
@@ -46,7 +61,7 @@ function ignored_funcs(node, access_specifier) {
 
 function class_label(node_name) {
     # Format class label if the passed graph node name is a class
-    # This supposed nodes[node_name]["name"] has the class name
+    # This supposes nodes[node_name]["name"] has the class name
     if (nodes[node_name]["kind"] ~ /class/)
     {
         class = "<b>" format(nodes[node_name]["label"]) "</b>"
@@ -112,7 +127,7 @@ BEGIN {
 
 ### Parsing
 
-# A node will represent a class, and is an array with indices:
+# A node will represent a class or a type, and is an array with indices:
 #    [
 #        label : string,       -> contains formatted class/Template name
 #        kind : string,        -> node kind
